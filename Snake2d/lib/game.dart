@@ -23,9 +23,11 @@ class GamePage extends StatefulWidget{
 class _GamePageState extends State<GamePage>{
 
   List<Offset> positions = [];
+  Offset? foodPosition;
+  late Piece food;
   int length = 5;
   int step = 20;
-
+  int score = 0;
 
   Direction direction = Direction.down;
   late double screenWidth;
@@ -40,6 +42,7 @@ class _GamePageState extends State<GamePage>{
     final pieces = <Piece>[];
 
     draw();
+    drawFood();
     for(var i =0 ; i<= length; ++i){
 
       if(i >= positions.length){
@@ -76,9 +79,38 @@ class _GamePageState extends State<GamePage>{
     positions[0] = await getNextPosition(positions[0]);
 
   }
+
+  void drawFood() {
+
+    // 1
+    foodPosition ??= getRandomPositionWithinRange();
+    if (foodPosition == positions[0]) {
+      length++;
+      speed = speed + 0.25;
+      score = score + 5;
+      changeSpeed();
+
+      foodPosition = getRandomPositionWithinRange();
+    }
+
+    // 2
+    food = Piece(
+      posX: foodPosition!.dx.toInt(),
+      posY: foodPosition!.dy.toInt(),
+      size: step,
+      color: Color(0XFF8EA604),
+      isAnimated: true,
+    );
+  }
   Future<Offset> getNextPosition(Offset position) async {
     Offset nextPosition = const Offset(0, 0);
 
+    if(detectCollision(position)){
+      if(timer != null && timer!.isActive == true) timer!.cancel();
+      await Future.delayed(
+          Duration(milliseconds: 500), () => showGameOverDialog());
+      return position;
+    }
     if (direction == Direction.right) {
       nextPosition = Offset(position.dx + step, position.dy);
     } else if (direction == Direction.left) {
@@ -89,8 +121,48 @@ class _GamePageState extends State<GamePage>{
       nextPosition = Offset(position.dx, position.dy + step);
     }
 
+
     return nextPosition;
   }
+
+  Widget getScore() {
+    return Positioned(
+      top: 50.0,
+      right: 40.0,
+      child: Text(
+        "Score: " + score.toString(),
+        style: TextStyle(fontSize: 24.0),
+      ),
+    );
+  }
+
+  void showGameOverDialog(){
+
+    showDialog(
+        barrierDismissible: false,context: context, builder: (ctx){
+      return AlertDialog(backgroundColor: Colors.red,shape: RoundedRectangleBorder(borderRadius: BorderRadius.all(Radius.circular(10.0))),
+      title: Text("Game Over",style: TextStyle(color: Colors.white)),
+        content: Text(
+          "Your game is over but you played well. Your score is " + score.toString() + ".",
+          style: const TextStyle(color: Colors.white),
+
+        ),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                restart();
+              },
+              child: Text(
+                "Restart",
+                style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ]
+      );
+    });
+  }
+
 
   Offset getRandomPositionWithinRange() {
     int posX = Random().nextInt(upperBoundX) + lowerBoundX;
@@ -107,6 +179,12 @@ class _GamePageState extends State<GamePage>{
   }
 
   void restart() {
+    score = 0;
+    length = 5;
+    positions = [];
+    direction = Direction.down;
+    speed = 1;
+
     changeSpeed();
   }
 
@@ -135,6 +213,37 @@ class _GamePageState extends State<GamePage>{
     );
 
   }
+  Widget getPlayAreaBorder() {
+    return Positioned(
+      top: lowerBoundY.toDouble(),
+      left: lowerBoundX.toDouble(),
+      child: Container(
+        width: (upperBoundX - lowerBoundX + step).toDouble(),
+        height: (upperBoundY - lowerBoundY + step).toDouble(),
+        decoration: BoxDecoration(
+          border: Border.all(
+            color: Colors.black.withOpacity(0.2),
+            style: BorderStyle.solid,
+            width: 1.0,
+          ),
+        ),
+      ),
+    );
+  }
+
+  bool detectCollision(Offset position){
+    if (position.dx >= upperBoundX && direction == Direction.right) {
+      return true;
+    } else if (position.dx <= lowerBoundX && direction == Direction.left) {
+      return true;
+    } else if (position.dy >= upperBoundY && direction == Direction.down) {
+      return true;
+    } else if (position.dy <= lowerBoundY && direction == Direction.up) {
+      return true;
+    }
+
+    return false;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -151,8 +260,12 @@ class _GamePageState extends State<GamePage>{
       body: Container(
         color: Color(0XFFF5BB00),
         child: Stack(
-          children: [Stack(children: getPieces()),
-            getControls()
+          children: [
+            getPlayAreaBorder(),
+            Stack(children: getPieces()),
+            getControls(),
+            food,
+            getScore(),
           ]
         ),
       ),
